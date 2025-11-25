@@ -16,7 +16,7 @@ const getPlatformBackend = () => {
 const DEFAULT_BACKEND =
   window.__AETHERIA_BACKEND__ ||
   localStorage.getItem("aetheria_backend") ||
-  process.env.AETHERIA_BACKEND ||
+  import.meta.env.VITE_API_URL ||
   getPlatformBackend();
 
 /* ---------- small utils ---------- */

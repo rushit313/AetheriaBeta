@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Aetheria — License Generator (Admin only)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root{
+      --bg:#0b0f14; --panel:#10161d; --panel-2:#0f141b;
+      --text:#e9eef5; --muted:#9fb0c3; --accent:#2ea043; --accent-2:#1f6feb;
+      --danger:#e5534b; --border:#1e2630; --input:#0c1218; --input-border:#1d2b3a;
+      --shadow:0 8px 30px rgba(0,0,0,.35); --radius:12px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;padding:28px;background:var(--bg);color:var(--text);
+      font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;}
+    .wrap{max-width:980px;margin:0 auto}
+    .title{display:flex;align-items:center;gap:12px;margin:0 0 18px;font-weight:800;letter-spacing:.2px;font-size:22px}
+    .spark{font-size:22px;color:#8dd6ff;filter:drop-shadow(0 0 10px rgba(141,214,255,.35))}
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+    .section{padding:18px;border-top:1px solid var(--border)} .section:first-of-type{border-top:0}
+    .grid{display:grid;gap:14px} .g2{grid-template-columns:1fr 260px} .g3{grid-template-columns:1fr 1fr}
+    @media (max-width:880px){.g2,.g3{grid-template-columns:1fr}}
+    label{display:block;font-size:13px;color:var(--muted);margin:0 0 6px;letter-spacing:.2px}
+    input[type="text"],input[type="number"]{width:100%;background:var(--input);color:var(--text);
+      border:1px solid var(--input-border);border-radius:10px;padding:12px;outline:none;font-size:15px}
+    input::placeholder{color:#6f8398} input:focus{border-color:#2b82ff}
+    .row{display:flex;gap:12px;align-items:center}
+    .btn{user-select:none;background:var(--accent);color:white;font-weight:700;border:0;border-radius:10px;padding:12px 16px;cursor:pointer;transition:transform .03s,opacity .15s,box-shadow .15s;box-shadow:0 6px 22px rgba(46,160,67,.25)}
+    .btn:hover{opacity:.95} .btn:active{transform:translateY(1px)}
+    .btn.secondary{background:var(--accent-2);box-shadow:0 6px 22px rgba(31,111,235,.25)}
+    .btn.muted{background:#27313d;color:#d9e6f5;box-shadow:none}
+    .btn.full{width:100%}
+    .file-pill{background:var(--panel-2);border:1px dashed var(--input-border);color:#bcd0e6;padding:10px 12px;border-radius:10px;font-size:13px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+    .status{margin-top:6px;font-size:13px;min-height:20px;color:#bcd0e6}
+    .status.error{color:var(--danger)} .status.ok{color:#43d17f}
+    .preview{width:100%;min-height:180px;max-height:280px;resize:vertical;background:#0a1117;color:#cfe6ff;border:1px solid var(--input-border);border-radius:10px;padding:12px;font:13px/1.45 ui-monospace,Menlo,Consolas,monospace}
+    .divider{height:1px;background:var(--border);margin:12px 0}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1 class="title"><span class="spark">✨</span> Aetheria — License Generator <span style="font-weight:600;color:#8aa1b7">&nbsp;(Admin only)</span></h1>
+
+    <div class="card">
+      <div class="section grid g3">
+        <div>
+          <label for="machineId">Machine ID (from staff PC)</label>
+          <input id="machineId" type="text" placeholder="paste machine ID" autocomplete="off" />
+        </div>
+        <div>
+          <label for="staffName">User/Staff Name</label>
+          <input id="staffName" type="text" placeholder="e.g., Anurag" autocomplete="off" />
+        </div>
+      </div>
+
+      <div class="section grid g3">
+        <div>
+          <label for="days">Expires In (days)</label>
+          <input id="days" type="number" min="1" value="365" />
+        </div>
+        <div>
+          <label for="iso">— OR — Explicit Expiry (ISO)</label>
+          <input id="iso" type="text" placeholder="YYYY-MM-DD or full ISO (optional)" />
+        </div>
+      </div>
+
+      <div class="section grid g2">
+        <div>
+          <label>Private Key</label>
+          <div class="row">
+            <div id="privateKeyPath" class="file-pill">No file selected</div>
+            <button id="btnPickKey" class="btn muted">Pick Private Key</button>
+          </div>
+          <div class="status" id="status">Ready.</div>
+        </div>
+        <div class="row">
+          <button id="btnGenerate" class="btn full">Generate License</button>
+          <button id="btnSave" class="btn secondary full">Save As…</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="divider"></div>
+        <label for="preview">Preview (license.json)</label>
+        <textarea id="preview" class="preview" spellcheck="false" readonly>{}</textarea>
+      </div>
+    </div>
+  </div>
+
+  <script src="./renderer.js"></script>
+</body>
+</html>

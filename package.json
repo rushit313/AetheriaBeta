@@ -1,0 +1,31 @@
+{
+  "name": "aetheria-beta",
+  "version": "1.1.0-beta.0",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "cross-env AETHERIA_PORT=5001 electron ."
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.0.0",
+    "@types/react": "^19.2.3",
+    "@types/react-dom": "^19.2.2",
+    "@vitejs/plugin-react": "^4.3.0",
+    "autoprefixer": "^10.4.20",
+    "cross-env": "^7.0.3",
+    "electron": "^31.7.7",
+    "tailwindcss": "^4.0.0",
+    "vite": "^5.4.21"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/cli": "^6.0.0",
+    "@capacitor/core": "^6.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  }
+}

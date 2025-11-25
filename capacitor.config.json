@@ -1,0 +1,9 @@
+{
+  "appId": "com.aetheria.beta",
+  "appName": "Aetheria",
+  "webDir": "dist",
+  "server": {
+    "cleartext": true,
+    "androidScheme": "http"
+  }
+}

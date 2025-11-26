@@ -151,15 +151,17 @@ function ImageOverlay({ title, file, textures, palette, metrics, score, critique
 
               <div className="callout-title">{t.name}</div>
               <div className="callout-meta">
-                {t.suggestion ? (
-                  <div style={{ color: 'var(--success)', fontWeight: 600, marginBottom: 4 }}>
-                    Suggestion: {t.suggestion}
+                {/* Always show suggestion if available */}
+                {t.suggestion && (
+                  <div style={{ color: 'var(--success)', fontWeight: 600, marginBottom: 6, fontSize: 13 }}>
+                    ✓ Suggested: {t.suggestion}
                   </div>
-                ) : (
-                  t.hex && <div style={{ color: t.hex, marginBottom: 4, fontWeight: 600 }}>{t.hex}</div>
                 )}
 
-                {t.note && <div>{t.note}</div>}
+                {/* Show color */}
+                {t.hex && <div style={{ color: t.hex, marginBottom: 4, fontWeight: 600, fontSize: 12 }}>{t.hex}</div>}
+
+                {t.note && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>{t.note}</div>}
 
                 {t.link && (
                   <a

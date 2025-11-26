@@ -159,23 +159,67 @@ def analyze_render():
             critique = "AI Analysis failed to process the image. Please check your API key."
 
     # --- Fallback / Mock Data if AI not used or failed ---
-    if not render_textures:
-        # Keep some mock data so the UI isn't empty during testing without API key
-        render_textures = [
-            {
-                "name": "Floor (Mock)",
-                "type": "wood",
-                "x": 50, "y": 80,
-                "hex": "#8b5a2b",
-                "suggestion": "Oak Plank Natural",
-                "suggestion_url": "https://dl.polyhaven.com/file/ph-assets/Textures/jpg/2k/wood_floor_deck/wood_floor_deck_diff_2k.jpg",
-                "link": "https://polyhaven.com/a/wood_floor_deck",
-                "texture_url": "https://via.placeholder.com/60/8b5a2b/ffffff?text=Floor",
-                "note": "Too smooth, needs bump map"
-            }
-        ]
-        if use_ai:
-             critique = critique or "Could not detect specific materials. Using fallback data."
+    if not render_textures and not use_ai:
+        # Only show message if AI is not enabled
+        critique = "Enable 'AI Critique' to analyze materials automatically."
+    
+    # --- Reference Image Analysis (if provided) ---
+    reference_textures = []
+    if ref_bytes and use_ai and AI_MODULES_OK:
+        print("Analyzing reference image...")
+        ref_ai_result = analyze_image_with_ai(ref_bytes)
+        
+        if ref_ai_result.get('success'):
+            ref_materials = ref_ai_result.get('materials', [])
+            from material_db import MATERIAL_DATABASE
+            
+            for i, mat in enumerate(ref_materials):
+                mat_type = mat.get('type', 'concrete')
+                category = get_material_category(mat_type)
+                mat_entry = MATERIAL_DATABASE.get(category, {})
+                textures = mat_entry.get('textures', [])
+                suggestion_data = textures[0] if textures else {}
+                
+                reference_textures.append({
+                    "name": mat.get('name', f"Material {i+1}"),
+                    "type": mat_type,
+                    "x": mat.get('x', 50),
+                    "y": mat.get('y', 50),
+                    "hex": mat.get('color', '#cccccc'),
+                    "suggestion": suggestion_data.get('suggestion', 'Standard Finish'),
+                    "suggestion_url": suggestion_data.get('suggestion_url', ''),
+                    "link": suggestion_data.get('link', '#'),
+                    "texture_url": "https://via.placeholder.com/60?text=Ref",
+                    "note": f"Reference: {mat_type}"
+                })
+    
+    # --- Compare Render vs Reference ---
+    differences = []
+    if render_textures and reference_textures:
+        # Compare material types
+        render_types = set(t['type'] for t in render_textures)
+        ref_types = set(t['type'] for t in reference_textures)
+        
+        missing_in_render = ref_types - render_types
+        extra_in_render = render_types - ref_types
+        
+        if missing_in_render:
+            differences.append(f"Missing materials in render: {', '.join(missing_in_render)}")
+        if extra_in_render:
+            differences.append(f"Additional materials in render: {', '.join(extra_in_render)}")
+        
+        # Update critique with comparison
+        if use_ai and render_textures:
+            render_mat_names = [t['name'] for t in render_textures]
+            ref_mat_names = [t['name'] for t in reference_textures] if reference_textures else []
+            
+            if ref_mat_names:
+                critique = f"Render Analysis: Detected {len(render_textures)} materials ({', '.join(render_mat_names[:3])}{'...' if len(render_mat_names) > 3 else ''}). "
+                critique += f"Reference has {len(reference_textures)} materials ({', '.join(ref_mat_names[:3])}{'...' if len(ref_mat_names) > 3 else ''}). "
+                if differences:
+                    critique += f"Key differences: {differences[0]}"
+            else:
+                critique = f"Detected {len(render_textures)} materials: {', '.join(render_mat_names)}. Upload a reference image for comparison."
 
     # --- Lighting Analysis ---
     lighting_suggestions = []

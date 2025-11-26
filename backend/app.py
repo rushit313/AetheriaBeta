@@ -168,8 +168,8 @@ def analyze_render():
                 "x": 50, "y": 80,
                 "hex": "#8b5a2b",
                 "suggestion": "Oak Plank Natural",
-                "suggestion_url": "https://images.unsplash.com/photo-1516455590571-18256e5bb9ff?auto=format&fit=crop&w=64&q=80",
-                "link": "https://www.poliigon.com/texture/wood-flooring-001",
+                "suggestion_url": "https://dl.polyhaven.com/file/ph-assets/Textures/jpg/2k/wood_floor_deck/wood_floor_deck_diff_2k.jpg",
+                "link": "https://polyhaven.com/a/wood_floor_deck",
                 "texture_url": "https://via.placeholder.com/60/8b5a2b/ffffff?text=Floor",
                 "note": "Too smooth, needs bump map"
             }

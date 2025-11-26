@@ -52,3 +52,4 @@ admin-secure/
 # Capacitor
 .capacitor/
 ios/
+.vercel

@@ -5,10 +5,10 @@ Uses OpenRouter API to detect objects and materials in architectural renders
 
 import os
 import base64
+import json
+import re
 import requests
 from typing import List, Dict, Optional
-import io
-from PIL import Image
 
 def encode_image_to_base64(image_bytes: bytes) -> str:
     """Convert image bytes to base64 string"""
@@ -39,20 +39,42 @@ def analyze_image_with_ai(image_bytes: bytes, api_key: Optional[str] = None) -> 
         # Encode image
         base64_image = encode_image_to_base64(image_bytes)
         
-        # Prepare prompt for architectural analysis
-        prompt = """Analyze this architectural render image and identify:
+        # Prepare prompt for comprehensive architectural analysis
+        prompt = """Analyze this architectural render image in detail and identify ALL visible materials and elements.
 
-1. **Materials visible** (e.g., glass, concrete, wood, metal, brick, plaster)
-2. **Objects/Elements** (e.g., windows, doors, walls, floors, furniture, vegetation)
-3. **Approximate positions** (top/middle/bottom, left/center/right)
+Please provide a comprehensive analysis including:
+- Building facade materials (glass, metal panels, concrete, brick, etc.)
+- Ground/road surfaces (asphalt, pavement, grass, etc.)
+- Vegetation (trees, plants, landscaping)
+- Sky and atmospheric elements
+- Lighting conditions (sunlight, shadows, time of day)
+- Any other visible materials or textures
 
-For each material/object detected, provide:
-- Name (e.g., "Glass Facade", "Concrete Wall")
-- Type (glass/concrete/wood/metal/brick/plaster/fabric/stone/vegetation/sky)
-- Position (as percentage: x: 0-100, y: 0-100 where 0,0 is top-left)
-- Dominant color (hex code if possible)
+For EACH material/element detected, provide:
+1. A descriptive name (e.g., "Glass Curtain Wall", "Asphalt Road", "Green Vegetation")
+2. Material type (glass/concrete/wood/metal/brick/plaster/asphalt/grass/vegetation/sky/stone)
+3. Approximate position in the image (x: 0-100, y: 0-100 where 0,0 is top-left)
+4. Dominant color as hex code (e.g., #87CEEB)
 
-Format your response as a structured list. Be specific about architectural materials."""
+Return your response as a JSON array with this exact format:
+[
+  {
+    "name": "Glass Facade",
+    "type": "glass",
+    "x": 50,
+    "y": 40,
+    "color": "#87CEEB"
+  },
+  {
+    "name": "Asphalt Road",
+    "type": "asphalt",
+    "x": 50,
+    "y": 85,
+    "color": "#3C3C3C"
+  }
+]
+
+Analyze thoroughly and include at least 5-10 different materials/elements."""
 
         # Call OpenRouter API
         response = requests.post(
@@ -113,45 +135,79 @@ Format your response as a structured list. Be specific about architectural mater
 def parse_ai_response(response_text: str) -> List[Dict]:
     """
     Parse AI response text into structured material data.
-    
-    This is a simple parser - you may want to make it more robust
-    based on the actual response format from the AI.
+    Handles both JSON array format and fallback text parsing.
     """
     materials = []
     
-    # Simple parsing logic
-    # Look for material mentions and try to extract structured data
-    # This is a basic implementation - can be enhanced
+    try:
+        # Try to extract JSON array from response
+        json_match = re.search(r'\[[\s\S]*\]', response_text)
+        if json_match:
+            json_str = json_match.group(0)
+            parsed_materials = json.loads(json_str)
+            
+            # Validate and normalize the parsed materials
+            for mat in parsed_materials:
+                if isinstance(mat, dict) and 'type' in mat:
+                    materials.append({
+                        'name': mat.get('name', 'Unknown Material'),
+                        'type': mat.get('type', 'unknown').lower(),
+                        'x': int(mat.get('x', 50)),
+                        'y': int(mat.get('y', 50)),
+                        'color': mat.get('color', '#808080')
+                    })
+            
+            if materials:
+                return materials
+    except (json.JSONDecodeError, ValueError) as e:
+        print(f"JSON parsing failed: {e}, falling back to text parsing")
     
+    # Fallback: text-based parsing
     lines = response_text.split('\n')
     current_material = {}
     
     for line in lines:
         line = line.strip()
         if not line:
-            if current_material:
+            if current_material and 'type' in current_material:
                 materials.append(current_material)
                 current_material = {}
             continue
         
-        # Try to extract material info
-        # This is simplified - actual parsing depends on AI response format
-        if 'glass' in line.lower():
+        # Try to extract material type from common keywords
+        line_lower = line.lower()
+        if any(keyword in line_lower for keyword in ['glass', 'window', 'facade']):
             current_material['type'] = 'glass'
-        elif 'concrete' in line.lower():
+            current_material['name'] = line.split(':')[0] if ':' in line else 'Glass Element'
+        elif any(keyword in line_lower for keyword in ['concrete', 'cement']):
             current_material['type'] = 'concrete'
-        elif 'wood' in line.lower():
+            current_material['name'] = line.split(':')[0] if ':' in line else 'Concrete Element'
+        elif any(keyword in line_lower for keyword in ['wood', 'timber']):
             current_material['type'] = 'wood'
-        elif 'metal' in line.lower():
+            current_material['name'] = line.split(':')[0] if ':' in line else 'Wood Element'
+        elif any(keyword in line_lower for keyword in ['metal', 'steel', 'aluminum']):
             current_material['type'] = 'metal'
-        elif 'brick' in line.lower():
+            current_material['name'] = line.split(':')[0] if ':' in line else 'Metal Element'
+        elif any(keyword in line_lower for keyword in ['brick', 'masonry']):
             current_material['type'] = 'brick'
+            current_material['name'] = line.split(':')[0] if ':' in line else 'Brick Element'
+        elif any(keyword in line_lower for keyword in ['grass', 'lawn', 'vegetation', 'tree', 'plant']):
+            current_material['type'] = 'grass'
+            current_material['name'] = line.split(':')[0] if ':' in line else 'Vegetation'
+        elif any(keyword in line_lower for keyword in ['road', 'asphalt', 'pavement']):
+            current_material['type'] = 'asphalt'
+            current_material['name'] = line.split(':')[0] if ':' in line else 'Road Surface'
+        elif 'sky' in line_lower:
+            current_material['type'] = 'sky'
+            current_material['name'] = 'Sky'
         
-        # Extract name if present
-        if ':' in line and 'name' in line.lower():
-            current_material['name'] = line.split(':', 1)[1].strip()
+        # Set default position if not set
+        if 'type' in current_material and 'x' not in current_material:
+            current_material['x'] = 50
+            current_material['y'] = 50
+            current_material['color'] = '#808080'
     
-    if current_material:
+    if current_material and 'type' in current_material:
         materials.append(current_material)
     
     return materials
@@ -170,6 +226,7 @@ def get_material_category(material_type: str) -> str:
         'sky': 'sky_blue',
         'marble': 'marble_white',
         'stone': 'marble_white',
-        'fabric': 'fabric_neutral'
+        'fabric': 'fabric_neutral',
+        'asphalt': 'concrete_gray'
     }
     return mapping.get(material_type.lower(), 'concrete_gray')

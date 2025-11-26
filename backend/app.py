@@ -2,6 +2,9 @@ import argparse, io, os
 from typing import List, Tuple
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Optional: light palette sniff if Pillow is present
 try:
@@ -9,6 +12,15 @@ try:
     PIL_OK = True
 except Exception:
     PIL_OK = False
+
+# Import AI modules
+try:
+    from material_db import generate_texture_suggestions
+    from ai_vision import analyze_image_with_ai, get_material_category
+    AI_MODULES_OK = True
+except Exception as e:
+    print(f"Warning: AI modules not available: {e}")
+    AI_MODULES_OK = False
 
 app = Flask(__name__)
 CORS(app)
@@ -66,8 +78,8 @@ def analyze_render():
     Accepts:
       - render: required image
       - reference: optional image
-      - ai: "1" or "0" (ignored here; front-end toggle preserved)
-    Returns JSON the front-end expects (palettes + texture callouts).
+      - ai: "1" or "0" (toggle for AI analysis)
+    Returns JSON with palettes, texture callouts, and AI critique.
     """
     render_file = request.files.get("render")
     if not render_file:
@@ -76,12 +88,14 @@ def analyze_render():
     render_bytes = render_file.read()
     ref_file = request.files.get("reference")
     ref_bytes = ref_file.read() if ref_file else None
+    
+    use_ai = request.form.get("ai") == "1"
 
     # Palettes
     render_palette = quick_palette(render_bytes, k=6)
     ref_palette = quick_palette(ref_bytes, k=6) if ref_bytes else []
 
-    # Minimal analysis numbers (mocked / safe defaults)
+    # Basic image analysis (mocked for speed, can be replaced with OpenCV if needed)
     analysis = {
         "exposure_mean": 120.8,
         "contrast_std": 52.2,
@@ -95,15 +109,73 @@ def analyze_render():
     # Optional reference analysis
     analysis_ref = {"palette": ref_palette} if ref_bytes else {}
 
-    # --- Scoring & Critique Logic ---
-    # In a real app, compare analysis vs analysis_ref metrics.
-    # Here we mock a "Realism Score" and critique.
-    score = 72  # 0-100
-    critique = (
-        "The render has good composition but lacks the contrast depth of the reference. "
-        "The lighting feels a bit flat, and the wood textures are too smooth. "
-        "Increasing the ambient occlusion and using higher-roughness maps for the floor would improve realism."
-    )
+    # --- AI Analysis ---
+    render_textures = []
+    critique = None
+    score = 75 # Default score
+    
+    if use_ai and AI_MODULES_OK:
+        print("Starting AI analysis...")
+        ai_result = analyze_image_with_ai(render_bytes)
+        
+        if ai_result.get('success'):
+            # Process materials
+            raw_materials = ai_result.get('materials', [])
+            
+            # Convert to frontend format
+            from material_db import MATERIAL_DATABASE
+            
+            for i, mat in enumerate(raw_materials):
+                # Get suggestion from local DB based on detected type
+                mat_type = mat.get('type', 'concrete')
+                category = get_material_category(mat_type)
+                
+                # Look up in DB
+                mat_entry = MATERIAL_DATABASE.get(category, {})
+                textures = mat_entry.get('textures', [])
+                suggestion_data = textures[0] if textures else {}
+                
+                render_textures.append({
+                    "name": mat.get('name', f"Material {i+1}"),
+                    "type": mat_type,
+                    "x": 50 + (i * 10) % 40, # Mock position if not provided
+                    "y": 50 + (i * 10) % 40,
+                    "hex": mat.get('color', '#cccccc'),
+                    "suggestion": suggestion_data.get('suggestion', 'Standard Finish'),
+                    "suggestion_url": suggestion_data.get('suggestion_url', ''),
+                    "link": suggestion_data.get('link', '#'),
+                    "texture_url": "https://via.placeholder.com/60?text=Detected", # Placeholder for detected crop
+                    "note": f"Detected {mat_type}"
+                })
+            
+            # Extract critique from raw response if available or generate one
+            # For now, we'll use a simple generated one based on findings
+            material_names = [m.get('name', 'unknown') for m in raw_materials]
+            critique = f"AI Analysis detected the following materials: {', '.join(material_names)}. " \
+                       f"Consider refining the textures for {material_names[0] if material_names else 'surfaces'} to match the reference style."
+            score = 85
+        else:
+            print(f"AI Analysis failed: {ai_result.get('error')}")
+            critique = "AI Analysis failed to process the image. Please check your API key."
+
+    # --- Fallback / Mock Data if AI not used or failed ---
+    if not render_textures:
+        # Keep some mock data so the UI isn't empty during testing without API key
+        render_textures = [
+            {
+                "name": "Floor (Mock)",
+                "type": "wood",
+                "x": 50, "y": 80,
+                "hex": "#8b5a2b",
+                "suggestion": "Oak Plank Natural",
+                "suggestion_url": "https://images.unsplash.com/photo-1516455590571-18256e5bb9ff?auto=format&fit=crop&w=64&q=80",
+                "link": "https://www.poliigon.com/texture/wood-flooring-001",
+                "texture_url": "https://via.placeholder.com/60/8b5a2b/ffffff?text=Floor",
+                "note": "Too smooth, needs bump map"
+            }
+        ]
+        if use_ai:
+             critique = critique or "Could not detect specific materials. Using fallback data."
 
     # --- Lighting Analysis ---
     lighting_suggestions = []
@@ -126,115 +198,13 @@ def analyze_render():
             "suggestion": "Lighting is too flat. Add directional light.",
             "action": "Increase Contrast"
         })
-    
-    # Mock HDRI suggestion
-    lighting_suggestions.append({
-        "type": "HDRI",
-        "suggestion": "Use a 'Golden Hour' HDRI for warmer tones.",
-        "action": "Set HDRI: Golden Hour"
-    })
-
-    # ----- Texture callouts -----
-    # Enhanced with "suggestions" for the render
-    # Enhanced with "suggestions" for the render
-    render_textures = [
-        {
-            "name": "Floor Wood",
-            "texture_url": "https://dl.polyhaven.com/file/ph-assets/Textures/jpg/2k/wood_cabinet_worn/wood_cabinet_worn_diff_2k.jpg",
-            "hex": "#8b6a4b",
-            "x": 40,
-            "y": 80,
-            "suggestion": "Walnut Brown",
-            "suggestion_url": "https://dl.polyhaven.com/file/ph-assets/Textures/jpg/2k/walnut_veneer/walnut_veneer_diff_2k.jpg",
-            "link": "https://polyhaven.com/a/walnut_veneer"
-        },
-        {
-            "name": "Ceiling Plaster",
-            "texture_url": "https://dl.polyhaven.com/file/ph-assets/Textures/jpg/2k/plaster_grey/plaster_grey_diff_2k.jpg",
-            "hex": "#e5e5e5",
-            "x": 50,
-            "y": 15,
-            "suggestion": "Rough Plaster",
-            "suggestion_url": "https://dl.polyhaven.com/file/ph-assets/Textures/jpg/2k/white_rough_plaster/white_rough_plaster_diff_2k.jpg",
-            "link": "https://polyhaven.com/a/white_rough_plaster"
-        },
-        {
-            "name": "Velvet Sofa",
-            "texture_url": "https://dl.polyhaven.com/file/ph-assets/Textures/jpg/2k/fabric_pattern_07/fabric_pattern_07_col_1_2k.jpg",
-            "hex": "#2c5f2d",
-            "x": 25,
-            "y": 60,
-            "suggestion": "Emerald Velvet",
-            "suggestion_url": "https://dl.polyhaven.com/file/ph-assets/Textures/jpg/2k/fabric_pattern_05/fabric_pattern_05_col_01_2k.jpg",
-            "link": "https://polyhaven.com/a/fabric_pattern_05"
-        },
-        {
-            "name": "Marble Table",
-            "texture_url": "https://dl.polyhaven.com/file/ph-assets/Textures/jpg/2k/marble_01/marble_01_diff_2k.jpg",
-            "hex": "#f5f5f5",
-            "x": 70,
-            "y": 65,
-            "suggestion": "Carrara Marble",
-            "suggestion_url": "https://dl.polyhaven.com/file/ph-assets/Textures/jpg/2k/marble_01/marble_01_diff_2k.jpg",
-            "link": "https://polyhaven.com/a/marble_01"
-        }
-    ]
-
-    reference_textures = []
-    if ref_bytes:
-        reference_textures = [
-            {
-                "name": "Warm Walnut",
-                "texture_url": "https://dl.polyhaven.com/file/ph-assets/Textures/jpg/2k/walnut_veneer/walnut_veneer_diff_2k.jpg",
-                "note": "More pronounced grain, slightly cooler tint",
-                "link": "https://polyhaven.com/textures/wood",
-                "hex": "#8a6a4f",
-                "x": 35,
-                "y": 45,
-            },
-            {
-                "name": "Brushed Brass",
-                "texture_url": "https://dl.polyhaven.com/file/ph-assets/Textures/jpg/2k/brass_pure/brass_pure_diff_2k.jpg",
-                "note": "Use metal/roughness workflow; reduce roughness a bit",
-                "link": "https://polyhaven.com/textures/metal",
-                "hex": "#c7a24a",
-                "x": 65,
-                "y": 30,
-            },
-            {
-                "name": "Green Velvet",
-                "texture_url": "https://dl.polyhaven.com/file/ph-assets/Textures/jpg/2k/fabric_pattern_05/fabric_pattern_05_col_01_2k.jpg",
-                "note": "Rich, deep green fabric for upholstery",
-                "link": "https://polyhaven.com/a/fabric_pattern_05",
-                "hex": "#1a472a",
-                "x": 20,
-                "y": 60,
-            },
-            {
-                "name": "White Marble",
-                "texture_url": "https://dl.polyhaven.com/file/ph-assets/Textures/jpg/2k/marble_01/marble_01_diff_2k.jpg",
-                "note": "Classic white marble with subtle veining",
-                "link": "https://polyhaven.com/a/marble_01",
-                "hex": "#eeeeee",
-                "x": 75,
-                "y": 70,
-            }
-        ]
-
-    differences = []
-    if ref_bytes:
-        differences = [
-            "Wood grain too smooth compared to reference.",
-            "Flooring color slightly warmer than reference.",
-            "Metal accents: increase anisotropic highlight to match brushed brass.",
-        ]
 
     return jsonify(
         analysis=analysis,
         analysis_ref=analysis_ref,
         render_textures=render_textures,
-        reference_textures=reference_textures,
-        differences=differences,
+        reference_textures=[], # Reference textures not implemented yet
+        differences=[], # Differences not implemented yet
         score=score,
         critique=critique,
         lighting_suggestions=lighting_suggestions

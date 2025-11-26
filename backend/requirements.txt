@@ -2,3 +2,7 @@ flask==3.0.3
 flask-cors==4.0.0
 Pillow
 gunicorn==21.2.0
+requests
+numpy
+opencv-python-headless
+python-dotenv

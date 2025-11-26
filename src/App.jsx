@@ -404,8 +404,9 @@ export default function App() {
       const r = await fetch(`${backendUrl}/api/ping`);
       const j = await r.json();
       setMsg({ type: "ok", text: `Ping OK · ${JSON.stringify(j)}` });
-    } catch {
-      setMsg({ type: "err", text: "Ping failed" });
+    } catch (e) {
+      console.error(e);
+      setMsg({ type: "err", text: `Ping failed: ${e.message}` });
     }
   };
 

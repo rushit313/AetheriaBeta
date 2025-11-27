@@ -17,6 +17,7 @@ except Exception:
 try:
     from material_db import generate_texture_suggestions
     from ai_vision import analyze_image_with_ai, get_material_category
+    from image_stats import analyze_image_stats
     AI_MODULES_OK = True
 except Exception as e:
     print(f"Warning: AI modules not available: {e}")
@@ -95,16 +96,22 @@ def analyze_render():
     render_palette = quick_palette(render_bytes, k=6)
     ref_palette = quick_palette(ref_bytes, k=6) if ref_bytes else []
 
-    # Basic image analysis (mocked for speed, can be replaced with OpenCV if needed)
-    analysis = {
-        "exposure_mean": 120.8,
-        "contrast_std": 52.2,
-        "noise_level": 7.7,
-        "palette": render_palette,
-        "saturation_pct": 28.3,
-        "sharpness_laplacian_var": 1726,
-        "wb_shift_blue_minus_red": -15.5,
-    }
+    # Real Image Analysis
+    if AI_MODULES_OK:
+        analysis = analyze_image_stats(render_bytes)
+    else:
+        # Fallback if modules missing
+        analysis = {
+            "exposure_mean": 120.0,
+            "contrast_std": 50.0,
+            "noise_level": 5.0,
+            "saturation_pct": 30.0,
+            "sharpness_laplacian_var": 1000,
+            "wb_shift_blue_minus_red": 0.0,
+        }
+    
+    # Add palette to analysis dict
+    analysis["palette"] = render_palette
 
     # Optional reference analysis
     analysis_ref = {"palette": ref_palette} if ref_bytes else {}
@@ -112,7 +119,8 @@ def analyze_render():
     # --- AI Analysis ---
     render_textures = []
     critique = None
-    score = 75 # Default score
+    score = 0
+    suggestions = []
     
     if use_ai and AI_MODULES_OK:
         print("Starting AI analysis...")
@@ -121,6 +129,9 @@ def analyze_render():
         if ai_result.get('success'):
             # Process materials
             raw_materials = ai_result.get('materials', [])
+            critique = ai_result.get('critique')
+            score = ai_result.get('score', 75)
+            suggestions = ai_result.get('suggestions', [])
             
             # Convert to frontend format
             from material_db import MATERIAL_DATABASE
@@ -138,8 +149,8 @@ def analyze_render():
                 render_textures.append({
                     "name": mat.get('name', f"Material {i+1}"),
                     "type": mat_type,
-                    "x": 50 + (i * 10) % 40, # Mock position if not provided
-                    "y": 50 + (i * 10) % 40,
+                    "x": mat.get('x', 50 + (i * 10) % 40),
+                    "y": mat.get('y', 50 + (i * 10) % 40),
                     "hex": mat.get('color', '#cccccc'),
                     "suggestion": suggestion_data.get('suggestion', 'Standard Finish'),
                     "suggestion_url": suggestion_data.get('suggestion_url', ''),
@@ -148,12 +159,11 @@ def analyze_render():
                     "note": f"Detected {mat_type}"
                 })
             
-            # Extract critique from raw response if available or generate one
-            # For now, we'll use a simple generated one based on findings
-            material_names = [m.get('name', 'unknown') for m in raw_materials]
-            critique = f"AI Analysis detected the following materials: {', '.join(material_names)}. " \
-                       f"Consider refining the textures for {material_names[0] if material_names else 'surfaces'} to match the reference style."
-            score = 85
+            # If no critique returned, generate a fallback
+            if not critique:
+                material_names = [m.get('name', 'unknown') for m in raw_materials]
+                critique = f"AI Analysis detected: {', '.join(material_names)}. " \
+                           f"Consider refining the textures to match the reference style."
         else:
             print(f"AI Analysis failed: {ai_result.get('error')}")
             critique = "AI Analysis failed to process the image. Please check your API key."
@@ -162,6 +172,7 @@ def analyze_render():
     if not render_textures and not use_ai:
         # Only show message if AI is not enabled
         critique = "Enable 'AI Critique' to analyze materials automatically."
+        score = 0
     
     # --- Reference Image Analysis (if provided) ---
     reference_textures = []
@@ -208,47 +219,49 @@ def analyze_render():
         if extra_in_render:
             differences.append(f"Additional materials in render: {', '.join(extra_in_render)}")
         
-        # Update critique with comparison
-        if use_ai and render_textures:
-            render_mat_names = [t['name'] for t in render_textures]
-            ref_mat_names = [t['name'] for t in reference_textures] if reference_textures else []
-            
-            if ref_mat_names:
-                critique = f"Render Analysis: Detected {len(render_textures)} materials ({', '.join(render_mat_names[:3])}{'...' if len(render_mat_names) > 3 else ''}). "
-                critique += f"Reference has {len(reference_textures)} materials ({', '.join(ref_mat_names[:3])}{'...' if len(ref_mat_names) > 3 else ''}). "
-                if differences:
-                    critique += f"Key differences: {differences[0]}"
-            else:
-                critique = f"Detected {len(render_textures)} materials: {', '.join(render_mat_names)}. Upload a reference image for comparison."
+        # Update critique with comparison if not already detailed
+        if use_ai and render_textures and "Render Analysis" not in critique:
+             if differences:
+                 critique += f" Comparison Note: {differences[0]}"
 
-    # --- Lighting Analysis ---
+    # --- Lighting Analysis (Suggestions based on real stats) ---
     lighting_suggestions = []
-    if analysis["exposure_mean"] < 100:
-        lighting_suggestions.append({
-            "type": "Exposure",
-            "suggestion": "Increase global exposure or add fill lights.",
-            "action": "Adjust Exposure +0.5EV"
-        })
-    elif analysis["exposure_mean"] > 180:
-        lighting_suggestions.append({
-            "type": "Exposure",
-            "suggestion": "Reduce exposure to prevent blown-out highlights.",
-            "action": "Adjust Exposure -0.5EV"
-        })
+    # Use the suggestions from AI if available, otherwise generate from stats
+    if suggestions:
+        for s in suggestions:
+            lighting_suggestions.append({
+                "type": "AI Suggestion",
+                "suggestion": s,
+                "action": "Apply Fix"
+            })
+    else:
+        # Fallback to stat-based suggestions
+        if analysis["exposure_mean"] < 80:
+            lighting_suggestions.append({
+                "type": "Exposure",
+                "suggestion": "Image is underexposed. Increase global exposure or add fill lights.",
+                "action": "Adjust Exposure +1.0EV"
+            })
+        elif analysis["exposure_mean"] > 200:
+            lighting_suggestions.append({
+                "type": "Exposure",
+                "suggestion": "Image is overexposed. Reduce exposure to prevent blown-out highlights.",
+                "action": "Adjust Exposure -1.0EV"
+            })
 
-    if analysis["contrast_std"] < 40:
-        lighting_suggestions.append({
-            "type": "Contrast",
-            "suggestion": "Lighting is too flat. Add directional light.",
-            "action": "Increase Contrast"
-        })
+        if analysis["contrast_std"] < 30:
+            lighting_suggestions.append({
+                "type": "Contrast",
+                "suggestion": "Lighting is too flat. Add directional light or increase contrast.",
+                "action": "Increase Contrast"
+            })
 
     return jsonify(
         analysis=analysis,
         analysis_ref=analysis_ref,
         render_textures=render_textures,
-        reference_textures=[], # Reference textures not implemented yet
-        differences=[], # Differences not implemented yet
+        reference_textures=reference_textures,
+        differences=differences,
         score=score,
         critique=critique,
         lighting_suggestions=lighting_suggestions

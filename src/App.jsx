@@ -92,6 +92,7 @@ function PaletteChips({ title, palette }) {
 /* ---------- Image Overlay Component ---------- */
 function ImageOverlay({ title, file, textures, palette, metrics, score, critique }) {
   const [url, setUrl] = useState(null);
+  const [selectedTexture, setSelectedTexture] = useState(null);
 
   React.useEffect(() => {
     if (!file) return;
@@ -127,65 +128,31 @@ function ImageOverlay({ title, file, textures, palette, metrics, score, critique
       <div className="overlay-container">
         <img className="main-image" src={url} alt="render" />
 
-        {/* Texture Markers */}
+        {/* Texture Markers - Only Dots */}
         {textures && textures.map((t, i) => (
           <div
             key={i}
-            className="marker"
+            className="marker-dot"
             style={{
+              position: 'absolute',
               left: `${t.x || 50}%`,
-              top: `${t.y || 50}%`
+              top: `${t.y || 50}%`,
+              transform: 'translate(-50%, -50%)',
+              width: 24,
+              height: 24,
+              borderRadius: '50%',
+              background: t.hex || '#3b82f6',
+              border: '3px solid white',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+              cursor: 'pointer',
+              transition: 'transform 0.2s',
+              zIndex: 10
             }}
-          >
-            {/* Floating Card */}
-            <div className="callout-card">
-              <div style={{ display: 'flex', gap: 12 }}>
-                <img className="callout-image" style={{ width: 60, height: 60 }} src={t.texture_url} alt={t.name} />
-                {t.suggestion_url && (
-                  <>
-                    <div style={{ display: 'flex', alignItems: 'center', color: 'var(--text-secondary)' }}>→</div>
-                    <img className="callout-image" style={{ width: 60, height: 60, borderColor: 'var(--success)' }} src={t.suggestion_url} alt="Suggestion" />
-                  </>
-                )}
-              </div>
-
-              <div className="callout-title">{t.name}</div>
-              <div className="callout-meta">
-                {/* Always show suggestion if available */}
-                {t.suggestion && (
-                  <div style={{ color: 'var(--success)', fontWeight: 600, marginBottom: 6, fontSize: 13 }}>
-                    ✓ Suggested: {t.suggestion}
-                  </div>
-                )}
-
-                {/* Show color */}
-                {t.hex && <div style={{ color: t.hex, marginBottom: 4, fontWeight: 600, fontSize: 12 }}>{t.hex}</div>}
-
-                {t.note && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>{t.note}</div>}
-
-                {t.link && (
-                  <a
-                    href={t.link}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{
-                      display: 'inline-block',
-                      marginTop: 8,
-                      background: 'var(--accent-primary)',
-                      color: '#fff',
-                      padding: '4px 12px',
-                      borderRadius: 6,
-                      textDecoration: 'none',
-                      fontSize: 12,
-                      fontWeight: 600
-                    }}
-                  >
-                    Download Texture
-                  </a>
-                )}
-              </div>
-            </div>
-          </div>
+            onClick={() => setSelectedTexture(t)}
+            onMouseEnter={(e) => e.currentTarget.style.transform = 'translate(-50%, -50%) scale(1.2)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'translate(-50%, -50%) scale(1)'}
+            title={t.name}
+          />
         ))}
 
         {/* Palette Overlay (Bottom Left) */}
@@ -247,6 +214,88 @@ function ImageOverlay({ title, file, textures, palette, metrics, score, critique
         <div style={{ marginTop: 16, padding: 16, background: 'rgba(255,255,255,0.5)', borderRadius: 12, border: '1px solid var(--glass-border)' }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-primary)', marginBottom: 4, textTransform: 'uppercase' }}>AI Critique</div>
           <div style={{ fontSize: 14, lineHeight: 1.5, color: 'var(--text-primary)' }}>{critique}</div>
+        </div>
+      )}
+
+      {/* Texture Details Modal */}
+      {selectedTexture && (
+        <div
+          className="modal-backdrop"
+          onClick={() => setSelectedTexture(null)}
+          style={{ zIndex: 1000 }}
+        >
+          <div
+            className="modal-content"
+            onClick={e => e.stopPropagation()}
+            style={{ maxWidth: 500 }}
+          >
+            <div className="modal-header">
+              <div className="card-title" style={{ marginBottom: 0 }}>{selectedTexture.name}</div>
+              <button className="btn-close" onClick={() => setSelectedTexture(null)}>×</button>
+            </div>
+            <div className="modal-body">
+              <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+                <img
+                  style={{ width: 80, height: 80, borderRadius: 8, objectFit: 'cover', border: '2px solid var(--glass-border)' }}
+                  src={selectedTexture.texture_url}
+                  alt={selectedTexture.name}
+                />
+                {selectedTexture.suggestion_url && (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', color: 'var(--text-secondary)', fontSize: 20 }}>→</div>
+                    <img
+                      style={{ width: 80, height: 80, borderRadius: 8, objectFit: 'cover', border: '2px solid var(--success)' }}
+                      src={selectedTexture.suggestion_url}
+                      alt="Suggestion"
+                    />
+                  </>
+                )}
+              </div>
+
+              {selectedTexture.suggestion && (
+                <div style={{
+                  padding: 12,
+                  background: 'rgba(34, 197, 94, 0.1)',
+                  borderRadius: 8,
+                  marginBottom: 12,
+                  border: '1px solid rgba(34, 197, 94, 0.3)'
+                }}>
+                  <div style={{ color: 'var(--success)', fontWeight: 600, fontSize: 14 }}>
+                    ✓ Suggested: {selectedTexture.suggestion}
+                  </div>
+                </div>
+              )}
+
+              {selectedTexture.hex && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>Color</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ width: 24, height: 24, borderRadius: 4, background: selectedTexture.hex, border: '1px solid var(--glass-border)' }} />
+                    <span style={{ fontWeight: 600, fontFamily: 'monospace' }}>{selectedTexture.hex}</span>
+                  </div>
+                </div>
+              )}
+
+              {selectedTexture.note && (
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>
+                  {selectedTexture.note}
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              {selectedTexture.link && (
+                <a
+                  href={selectedTexture.link}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn btn-primary"
+                  style={{ width: '100%', textAlign: 'center' }}
+                >
+                  Download Texture
+                </a>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

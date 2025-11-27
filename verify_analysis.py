@@ -22,23 +22,20 @@ def test_analysis():
         'render': ('test.jpg', img_bytes, 'image/jpeg')
     }
     
-    # Test without AI first (should get stats)
-    print("Testing Basic Analysis (No AI)...")
+    # Test WITH AI
+    print("Testing AI Analysis (ai=1)...")
     try:
-        resp = requests.post(url, files=files, data={'ai': '0'})
+        resp = requests.post(url, files=files, data={'ai': '1'})
         if resp.status_code == 200:
             data = resp.json()
             print("Success!")
-            print(f"Stats: {data.get('analysis')}")
-            # Verify stats are not the mock values
-            # Mock was: exposure 120.8, contrast 52.2
-            # Our solid color image should have 0 contrast
-            contrast = data['analysis']['contrast_std']
-            print(f"Contrast: {contrast}")
-            if contrast < 1.0:
-                print("PASS: Real stats are working (low contrast for solid image)")
+            print(f"Score: {data.get('score')}")
+            print(f"Critique: {data.get('critique')}")
+            
+            if data.get('score') > 0:
+                print("PASS: AI Analysis returned a score.")
             else:
-                print("FAIL: Contrast seems too high for solid image, might be using mock data?")
+                print("FAIL: Score is 0, AI might have failed.")
         else:
             print(f"Failed: {resp.status_code} - {resp.text}")
     except Exception as e:

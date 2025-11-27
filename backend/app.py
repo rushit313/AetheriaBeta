@@ -165,8 +165,9 @@ def analyze_render():
                 critique = f"AI Analysis detected: {', '.join(material_names)}. " \
                            f"Consider refining the textures to match the reference style."
         else:
-            print(f"AI Analysis failed: {ai_result.get('error')}")
-            critique = "AI Analysis failed to process the image. Please check your API key."
+            error_msg = ai_result.get('error')
+            print(f"AI Analysis failed: {error_msg}")
+            critique = f"AI Analysis failed: {error_msg}"
 
     # --- Fallback / Mock Data if AI not used or failed ---
     if not render_textures and not use_ai:

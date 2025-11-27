@@ -461,25 +461,156 @@ export default function App() {
     }
   };
 
+  // Helper function to parse AI suggestions into numeric adjustments
+  const parseAISuggestions = () => {
+    if (!result?.lighting_suggestions) return null;
+
+    const adjustments = {
+      exposure: 0,
+      contrast: 0,
+      bloom: 0,
+      temperature: 0,
+      saturation: 0
+    };
+
+    // Parse each suggestion
+    result.lighting_suggestions.forEach(suggestion => {
+      const type = suggestion.type?.toLowerCase() || '';
+      const suggestionText = suggestion.suggestion?.toLowerCase() || '';
+      const action = suggestion.action?.toLowerCase() || '';
+
+      // Parse exposure adjustments
+      if (type.includes('exposure') || suggestionText.includes('exposure')) {
+        if (suggestionText.includes('increase') || suggestionText.includes('underexposed')) {
+          // Extract value from action like "+1.0EV" or default to +0.5
+          const match = action.match(/\+?([\d.]+)/);
+          adjustments.exposure = match ? parseFloat(match[1]) : 0.5;
+        } else if (suggestionText.includes('reduce') || suggestionText.includes('overexposed')) {
+          const match = action.match(/-?([\d.]+)/);
+          adjustments.exposure = match ? -parseFloat(match[1]) : -0.5;
+        }
+      }
+
+      // Parse contrast adjustments
+      if (type.includes('contrast') || suggestionText.includes('contrast')) {
+        if (suggestionText.includes('increase') || suggestionText.includes('flat')) {
+          adjustments.contrast = 0.3;
+        } else if (suggestionText.includes('reduce')) {
+          adjustments.contrast = -0.2;
+        }
+      }
+
+      // Parse lighting/shadow suggestions
+      if (suggestionText.includes('shadow') || suggestionText.includes('highlight')) {
+        if (suggestionText.includes('stronger') || suggestionText.includes('enhance')) {
+          adjustments.bloom = 0.3;
+        }
+      }
+
+      // Parse reflectivity/material suggestions
+      if (suggestionText.includes('reflectivity') || suggestionText.includes('reflection')) {
+        if (suggestionText.includes('vary') || suggestionText.includes('increase')) {
+          adjustments.bloom = 0.25;
+        }
+      }
+
+      // Parse imperfection/realism suggestions
+      if (suggestionText.includes('imperfection') || suggestionText.includes('variation')) {
+        adjustments.saturation = -0.05; // Slight desaturation for realism
+      }
+    });
+
+    // Use analysis data as baseline if available
+    if (result?.analysis) {
+      const analysis = result.analysis;
+
+      // Adjust based on measured values
+      if (analysis.exposure_mean < 80) {
+        adjustments.exposure = Math.max(adjustments.exposure, 0.8);
+      } else if (analysis.exposure_mean > 200) {
+        adjustments.exposure = Math.min(adjustments.exposure, -0.8);
+      }
+
+      if (analysis.contrast_std < 30) {
+        adjustments.contrast = Math.max(adjustments.contrast, 0.4);
+      }
+
+      if (analysis.saturation_pct < 20) {
+        adjustments.saturation += 0.1;
+      } else if (analysis.saturation_pct > 60) {
+        adjustments.saturation -= 0.1;
+      }
+    }
+
+    return adjustments;
+  };
+
   const exportD5 = () => {
+    const adjustments = parseAISuggestions();
+
     const preset = {
       version: 1,
-      meta: { generator: "Aetheria", note: "Placeholder preset" },
-      grading: { exposure: 0.05, contrast: 0.15, bloom: 0.2, temperature: 0.0 },
+      meta: {
+        generator: "Aetheria AI",
+        note: adjustments
+          ? "Auto-generated from AI analysis and suggestions"
+          : "Default preset - run AI analysis for optimized settings",
+        timestamp: new Date().toISOString()
+      },
+      grading: adjustments ? {
+        exposure: adjustments.exposure,
+        contrast: adjustments.contrast,
+        bloom: adjustments.bloom,
+        temperature: adjustments.temperature,
+        saturation: adjustments.saturation
+      } : {
+        exposure: 0.0,
+        contrast: 0.0,
+        bloom: 0.0,
+        temperature: 0.0,
+        saturation: 0.0
+      },
+      suggestions: result?.lighting_suggestions || []
     };
-    downloadText("aetheria.d5pp", JSON.stringify(preset, null, 2));
+
+    downloadText("aetheria_ai.d5pp", JSON.stringify(preset, null, 2));
+    setMsg({
+      type: "ok",
+      text: adjustments
+        ? "D5 preset exported with AI-optimized settings!"
+        : "D5 preset exported (enable AI for optimized settings)"
+    });
   };
 
   const exportLumion = () => {
+    const adjustments = parseAISuggestions();
+
     const stack = {
-      LumionEffectStack9: {
-        Exposure: 0.05,
-        Contrast: 0.15,
-        Bloom: 0.2,
+      LumionEffectStack9: adjustments ? {
+        Exposure: adjustments.exposure,
+        Contrast: adjustments.contrast,
+        Bloom: adjustments.bloom,
+        Temperature: adjustments.temperature,
+        Saturation: adjustments.saturation,
+        _AetheriaNote: "Auto-generated from AI analysis"
+      } : {
+        Exposure: 0.0,
+        Contrast: 0.0,
+        Bloom: 0.0,
         Temperature: 0.0,
+        Saturation: 0.0,
+        _AetheriaNote: "Default - run AI analysis for optimized settings"
       },
+      Suggestions: result?.lighting_suggestions || []
     };
-    downloadText("aetheria.ls9", JSON.stringify(stack, null, 2));
+
+    downloadText("aetheria_ai.ls9", JSON.stringify(stack, null, 2));
+    setMsg({
+      type: "ok",
+      text: adjustments
+        ? "Lumion preset exported with AI-optimized settings!"
+        : "Lumion preset exported (enable AI for optimized settings)"
+    });
   };
 
   const exportMaterialBoard = () => {

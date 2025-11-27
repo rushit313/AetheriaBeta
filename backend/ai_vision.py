@@ -30,7 +30,7 @@ def analyze_image_with_ai(image_bytes: bytes, api_key: Optional[str] = None) -> 
     
     if not api_key:
         return {
-            'error': 'No API key provided',
+            'error': 'No API key provided. Set OPENROUTER_API_KEY in environment variables.',
             'materials': [],
             'objects': []
         }

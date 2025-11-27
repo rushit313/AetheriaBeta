@@ -70,42 +70,78 @@ Return your response as a VALID JSON object with this exact structure:
 For materials, use types: glass, concrete, wood, metal, brick, plaster, grass, vegetation, sky, stone, asphalt, fabric.
 """
 
-        # Call OpenRouter API
-        response = requests.post(
-            url="https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "model": "google/gemini-2.0-flash-exp:free",  # Free vision model
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
+        # Call OpenRouter API with retry logic
+        max_retries = 3
+        retry_delay = 2  # Start with 2 seconds
+        
+        for attempt in range(max_retries):
+            try:
+                response = requests.post(
+                    url="https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": "google/gemini-2.0-flash-exp:free",  # Free vision model
+                        "messages": [
                             {
-                                "type": "text",
-                                "text": prompt
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{base64_image}"
-                                }
+                                "role": "user",
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": prompt
+                                    },
+                                    {
+                                        "type": "image_url",
+                                        "image_url": {
+                                            "url": f"data:image/jpeg;base64,{base64_image}"
+                                        }
+                                    }
+                                ]
                             }
                         ]
+                    },
+                    timeout=45
+                )
+                
+                # Handle rate limiting (429)
+                if response.status_code == 429:
+                    if attempt < max_retries - 1:
+                        import time
+                        wait_time = retry_delay * (2 ** attempt)  # Exponential backoff
+                        print(f"Rate limit hit (429). Retrying in {wait_time}s... (attempt {attempt + 1}/{max_retries})")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        return {
+                            'error': f'Rate limit exceeded. Please wait a few minutes and try again.',
+                            'materials': [],
+                            'objects': []
+                        }
+                
+                if response.status_code != 200:
+                    return {
+                        'error': f'API error: {response.status_code}',
+                        'materials': [],
+                        'objects': []
                     }
-                ]
-            },
-            timeout=45
-        )
-        
-        if response.status_code != 200:
-            return {
-                'error': f'API error: {response.status_code}',
-                'materials': [],
-                'objects': []
-            }
+                
+                # Success - break out of retry loop
+                break
+                
+            except requests.exceptions.Timeout:
+                if attempt < max_retries - 1:
+                    import time
+                    print(f"Request timeout. Retrying... (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(retry_delay)
+                    continue
+                else:
+                    return {
+                        'error': 'Request timeout after multiple retries',
+                        'materials': [],
+                        'objects': []
+                    }
         
         result = response.json()
         ai_response = result['choices'][0]['message']['content']
